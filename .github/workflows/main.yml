@@ -13,14 +13,14 @@ jobs:
       - name: Create Executable
         uses: sayyid5416/pyinstaller@v1
         with:
-          python_ver: 3.9
+          python_ver: 3.11
           spec: 'src/diff.py'
           upload_exe_with_name: 'Diff'
           options: --onefile, --name "Diff", --windowed,
       - name: Download Zip
         uses: actions/download-artifact@v4
         with:
-          name: Notepad
+          name: Diff
       - name: Upload binaries to release
         uses: svenstaro/upload-release-action@v2
         with:
