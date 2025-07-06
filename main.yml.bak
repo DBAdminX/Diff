@@ -21,16 +21,11 @@ jobs:
         uses: actions/download-artifact@v4
         with:
           name: Diff
-      - name: Compile .ISS to .EXE Installer
-        uses: Minionguyjpro/Inno-Setup-Action@v1.2.2
-        with:
-          path: setup.iss
-          options: /O+
       - name: Upload binaries to release
         uses: svenstaro/upload-release-action@v2
         with:
           repo_token: ${{ secrets.GITHUB_TOKEN }}
-          file: ./Output/Diff.exe
+          file: ./dist/Diff.exe
           asset_name: Diff.exe
           tag: ${{ github.ref }}
           overwrite: true
