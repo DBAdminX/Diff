@@ -2,8 +2,9 @@ name: Build and Release
 
 on:
   push:
-    branches:
-      - main
+    # OR A||B
+    #branches:
+      #- main
     tags:
       - 'v*'
 jobs:
