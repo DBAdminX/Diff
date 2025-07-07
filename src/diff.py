@@ -9,7 +9,7 @@ class TextDiffViewer(tk.Tk):
         super().__init__()
 
         self.title("Text Diff Viewer")
-        self.geometry("1000x720")
+        self.geometry("1000x715")
 
         # Create main container
         main_frame = ttk.Frame(self)
