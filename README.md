@@ -29,3 +29,11 @@ winget validate --mainfest .
 
 wingetcreate submit .
 ```
+
+## Local Install
+
+```powershell
+winget settings --enable LocalManifestFiles
+
+winget install --mainfest .
+```
