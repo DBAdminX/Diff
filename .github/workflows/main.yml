@@ -36,3 +36,27 @@ jobs:
           tag: ${{ github.ref }}
           overwrite: true
           body: "This is my release text"
+  publish-to-winget:
+    runs-on: windows-latest
+    needs: build-and-release   # Only run after successful build & release upload
+    if: startsWith(github.ref, 'refs/tags/v')   # extra safety
+
+    steps:
+      - name: Get version from tag
+        id: get-version
+        run: |
+          # Finding the version from release name
+          $VERSION="${{ github.event.release.name }}" -replace '^.*/ '
+          "version=$VERSION" >> $env:GITHUB_OUTPUT
+        shell: pwsh
+
+      - name: Publish to WinGet
+        uses: vedantmgoyal9/winget-releaser@main
+        with:
+          identifier: DBAdminX.Diff      # ← REQUIRED: change to your real WinGet identifier (e.g. JanLunge.DiffTool)
+          version: ${{ steps.get-version.outputs.version }}
+          token: ${{ secrets.WINGET_TOKEN }}   # Personal Access Token with repo scope for winget-pkgs fork
+          # Optional but recommended:
+          # installers-regex: '\.exe$'               # only match .exe files
+          # max-versions-to-keep: 3
+
