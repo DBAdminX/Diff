@@ -2,7 +2,7 @@
 ; SEE THE DOCUMENTATION FOR DETAILS ON CREATING INNO SETUP SCRIPT FILES!
 
 #define MyAppName "Diff"
-#define MyAppVersion "1.0.9"
+#define MyAppVersion "1.0.10"
 #define MyAppPublisher "DBAdminX"
 #define MyAppURL "https://github.com/DBAdminX/Diff"
 #define MyAppExeName "Diff.exe"
