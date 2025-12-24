@@ -10,6 +10,7 @@ class SimpleDiffViewer(tk.Tk):
         self.title("Diff Viewer")
         self.geometry("1300x850")
 
+        # Main container
         main = ttk.Frame(self, padding=10)
         main.pack(fill=tk.BOTH, expand=True)
 
@@ -24,10 +25,9 @@ class SimpleDiffViewer(tk.Tk):
         paned.pack(side=tk.LEFT, fill=tk.BOTH, expand=True)
 
         # Create Sides
-        self.left_text, self.left_gutter = self._create_text_with_gutter(paned, "Original File")
-        self.right_text, self.right_gutter = self._create_text_with_gutter(paned, "Modified File")
+        self.left_text, self.left_gutter = self._create_text_with_gutter(paned, "Original (Left)")
+        self.right_text, self.right_gutter = self._create_text_with_gutter(paned, "Modified (Right)")
 
-        # Sync scrolling and content changes
         self._sync_lock = False
         for widget in (self.left_text, self.right_text):
             widget.bind("<MouseWheel>", self._on_mousewheel)
@@ -39,12 +39,29 @@ class SimpleDiffViewer(tk.Tk):
         ctrl_frame = ttk.Frame(main)
         ctrl_frame.pack(fill=tk.X, pady=10)
 
-        # Center the buttons in a sub-frame
         btn_container = ttk.Frame(ctrl_frame)
         btn_container.pack(anchor=tk.CENTER)
 
-        ttk.Button(btn_container, text="Compare", command=self.show_diff).pack(side=tk.LEFT, padx=5)
-        ttk.Button(btn_container, text="Clear All", command=self.clear_all).pack(side=tk.LEFT, padx=5)
+        # Compare Button
+        ttk.Button(btn_container, text="COMPARE", command=self.show_diff).pack(side=tk.LEFT, padx=5)
+
+        # Clear All Button - Standard tk.Button used for color support
+        self.clear_btn = tk.Button(
+            btn_container,
+            text="CLEAR ALL",
+            command=self.clear_all,
+            bg="#ff4d4d",  # Bright Red
+            fg="white",  # White text
+            activebackground="#cc0000",
+            activeforeground="white",
+            font=("Segoe UI", 9, "bold"),
+            padx=10,
+            relief="flat"
+        )
+        self.clear_btn.pack(side=tk.LEFT, padx=5)
+
+        # Copy Button
+        ttk.Button(btn_container, text="COPY RESULTS", command=self.copy_results).pack(side=tk.LEFT, padx=5)
 
         # --- BOTTOM SECTION: Diff Output ---
         diff_frame = ttk.LabelFrame(main, text="Differences Output", padding=5)
@@ -54,7 +71,7 @@ class SimpleDiffViewer(tk.Tk):
                                       bg="#fdf6e3", state='disabled')
         self.diff_view.pack(fill=tk.BOTH, expand=True)
 
-        # Tags for highlighting
+        # Tags
         self.diff_view.tag_configure("add", foreground="#006400", background="#e6ffe6")
         self.diff_view.tag_configure("remove", foreground="#8B0000", background="#ffe6e6")
         self.diff_view.tag_configure("sign", foreground="#555")
@@ -63,13 +80,18 @@ class SimpleDiffViewer(tk.Tk):
     def _create_text_with_gutter(self, parent, label):
         outer = ttk.Frame(parent)
         parent.add(outer, weight=1)
-        ttk.Label(outer, text=label).pack(pady=(0, 4))
+        ttk.Label(outer, text=label, font=("Segoe UI", 10, "bold")).pack(pady=(0, 4))
 
         btn_bar = ttk.Frame(outer)
         btn_bar.pack(fill=tk.X, pady=(0, 6))
 
-        cmd = self.load_left if "Original" in label else self.load_right
-        ttk.Button(btn_bar, text="Open File", command=cmd).pack(side=tk.LEFT)
+        is_left = "Original" in label
+        target_text = lambda: self.left_text if is_left else self.right_text
+
+        ttk.Button(btn_bar, text="Open File",
+                   command=lambda: self._load_file(target_text())).pack(side=tk.LEFT, padx=2)
+        ttk.Button(btn_bar, text="Paste",
+                   command=lambda: self._paste_from_clipboard(target_text())).pack(side=tk.LEFT, padx=2)
 
         text_frame = ttk.Frame(outer)
         text_frame.pack(fill=tk.BOTH, expand=True)
@@ -88,20 +110,30 @@ class SimpleDiffViewer(tk.Tk):
 
     # --- ACTIONS ---
 
+    def _paste_from_clipboard(self, widget):
+        try:
+            content = self.clipboard_get()
+            widget.delete("1.0", tk.END)
+            widget.insert("1.0", content)
+            self._update_all_gutters()
+        except tk.TclError:
+            messagebox.showwarning("Warning", "Clipboard is empty.")
+
+    def copy_results(self):
+        content = self.diff_view.get("1.0", tk.END).strip()
+        if content:
+            self.clipboard_clear()
+            self.clipboard_append(content)
+            messagebox.showinfo("Success", "Copied to clipboard!")
+        else:
+            messagebox.showwarning("Warning", "Nothing to copy!")
+
     def clear_all(self):
-        """Wipes all text widgets and resets the UI state."""
-        # Clear Input Text
         self.left_text.delete("1.0", tk.END)
         self.right_text.delete("1.0", tk.END)
-
-        # Clear Results
         self.diff_view.configure(state='normal')
         self.diff_view.delete("1.0", tk.END)
         self.diff_view.configure(state='disabled')
-
-        # Reset scrollbars and gutters
-        self.left_text.yview_moveto(0)
-        self.right_text.yview_moveto(0)
         self._update_all_gutters()
 
     def _update_all_gutters(self, event=None):
@@ -118,7 +150,7 @@ class SimpleDiffViewer(tk.Tk):
         gutter_widget.insert("1.0", line_numbers)
         gutter_widget.config(state='disabled')
 
-    # --- SCROLLING LOGIC ---
+    # --- SCROLLING ---
 
     def _sync_scroll(self, *args):
         if self._sync_lock: return
@@ -143,16 +175,10 @@ class SimpleDiffViewer(tk.Tk):
             w.yview_scroll(delta, "units")
         return "break"
 
-    # --- FILE HANDLING & DIFF ---
+    # --- CORE LOGIC ---
 
-    def load_left(self):
-        self._load_file(self.left_text, "Original")
-
-    def load_right(self):
-        self._load_file(self.right_text, "Modified")
-
-    def _load_file(self, widget, title):
-        path = filedialog.askopenfilename(title=f"Select {title} File")
+    def _load_file(self, widget):
+        path = filedialog.askopenfilename()
         if not path: return
         try:
             with open(path, 'r', encoding='utf-8') as f:
