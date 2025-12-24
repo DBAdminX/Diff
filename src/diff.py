@@ -43,7 +43,7 @@ class SimpleDiffViewer(tk.Tk):
         btn_container.pack(anchor=tk.CENTER)
 
         # Compare Button
-        ttk.Button(btn_container, text="COMPARE", command=self.show_diff).pack(side=tk.LEFT, padx=5)
+        ttk.Button(btn_container, text="Compare", command=self.show_diff).pack(side=tk.LEFT, padx=5)
 
         # Clear All Button - Standard tk.Button used for color support
         self.clear_btn = tk.Button(
