@@ -25,40 +25,13 @@ jobs:
           prerelease: false
           body: "Auto-generated cross-platform release for Diff Viewer ${{ github.ref_name }}"
 
-  build:
-    needs: create-release
-    runs-on: ${{ matrix.os }}
-    strategy:
-      matrix:
-        include:
-          - os: windows-latest
-            target: windows
-            artifact_name: DiffViewer.exe
-            installer_name: DiffViewer-Installer.exe
-            py_ver: '3.11'
-            icon: icon.ico
-
-          - os: macos-latest
-            target: macos
-            artifact_name: DiffViewer
-            py_ver: '3.11'
-            icon: icon.icns
-
-          - os: ubuntu-22.04
-            target: linux
-            artifact_name: DiffViewer
-            py_ver: '3.11'
-            icon: icon.svg   # Linux 直接用 SVG
-
+  generate-icons:
+    runs-on: ubuntu-22.04
     steps:
       - name: Checkout code
         uses: actions/checkout@v4
-        with:
-          fetch-depth: 0   # 需要 git log 获取 commit message
 
-      # ──────────────── 只在 Linux runner 上生成图标（.ico 和 .icns） ────────────────
-      - name: Generate icons from icon.svg (only on Linux)
-        if: matrix.os == 'ubuntu-22.04'
+      - name: Generate icons from icon.svg
         run: |
           sudo apt update
           sudo apt install -y imagemagick libicns-utils
@@ -81,27 +54,54 @@ jobs:
           # 生成 macOS .icns
           png2icns icon.icns icon-*.png
 
-          # 上传生成的图标供其他 runner 使用
+          # 打包上传
           mkdir -p icons
           cp icon.ico icon.icns icon.svg icons/
 
-      - name: Upload generated icons artifact (from Linux)
-        if: matrix.os == 'ubuntu-22.04'
+      - name: Upload generated icons
         uses: actions/upload-artifact@v4
         with:
           name: generated-icons
           path: icons/
           if-no-files-found: error
 
-      # ──────────────── Windows 和 macOS 下载生成的图标 ────────────────
+  build:
+    needs: [create-release, generate-icons]
+    runs-on: ${{ matrix.os }}
+    strategy:
+      matrix:
+        include:
+          - os: windows-latest
+            target: windows
+            artifact_name: DiffViewer.exe
+            installer_name: DiffViewer-Installer.exe
+            py_ver: '3.11'
+            icon: icon.ico
+
+          - os: macos-latest
+            target: macos
+            artifact_name: DiffViewer
+            py_ver: '3.11'
+            icon: icon.icns
+
+          - os: ubuntu-22.04
+            target: linux
+            artifact_name: DiffViewer
+            py_ver: '3.11'
+            icon: icon.svg
+
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+        with:
+          fetch-depth: 0   # 需要 git log 获取 commit message
+
       - name: Download generated icons
-        if: matrix.os != 'ubuntu-22.04'
         uses: actions/download-artifact@v4
         with:
           name: generated-icons
           path: icons/
 
-      # ──────────────── 安装 Python 和依赖 ────────────────
       - name: Set up Python
         uses: actions/setup-python@v5
         with:
@@ -113,7 +113,6 @@ jobs:
           pip install customtkinter pyinstaller
         shell: bash
 
-      # ──────────────── PyInstaller 打包（带图标） ────────────────
       - name: Build with PyInstaller
         run: |
           pyinstaller --onefile --windowed --name DiffViewer \
@@ -122,7 +121,6 @@ jobs:
             src/diff.py
         shell: bash
 
-      # ──────────────── 准备 artifact ────────────────
       - name: Prepare artifact
         run: |
           mkdir -p dist/artifacts
@@ -136,7 +134,7 @@ jobs:
           path: dist/artifacts/${{ matrix.artifact_name }}
           if-no-files-found: error
 
-      # ──────────────── Windows 专用：Inno Setup 安装程序 ────────────────
+      # Windows 专用：Inno Setup 安装程序
       - name: Compile Inno Setup Installer (Windows only)
         if: matrix.target == 'windows'
         uses: Minionguyjpro/Inno-Setup-Action@v1.2.2
@@ -159,7 +157,7 @@ jobs:
           path: dist/artifacts/${{ matrix.installer_name }}
           if-no-files-found: error
 
-      # ──────────────── Linux 专用：生成 .deb 包（使用 SVG 图标） ────────────────
+      # Linux 专用：生成 .deb 包（使用 SVG 图标）
       - name: Install fpm (for .deb)
         if: matrix.target == 'linux'
         run: |
@@ -184,7 +182,7 @@ jobs:
           Type=Application
           Categories=Utility;Development;' > staging/usr/share/applications/DiffViewer.desktop
 
-          # 复制 SVG 图标（scalable）
+          # 复制 SVG 图标
           cp icons/icon.svg staging/usr/share/icons/hicolor/scalable/apps/diffviewer.svg
 
       - name: Build .deb with fpm
@@ -209,7 +207,7 @@ jobs:
           path: diffviewer_*.deb
           if-no-files-found: error
 
-      # ──────────────── 获取 commit message 作为 release body ────────────────
+      # 获取 commit message 作为 release body
       - name: Get commit message for release body
         id: get_commit_msg
         run: |
@@ -220,7 +218,7 @@ jobs:
           echo "body=Release ${{ github.ref_name }}%0A%0A${COMMIT_MSG}" >> $GITHUB_OUTPUT
         shell: bash
 
-      # ──────────────── 上传到 Release ────────────────
+      # 上传到 Release
       - name: Upload executable to release
         uses: svenstaro/upload-release-action@v2
         with:
@@ -282,7 +280,7 @@ jobs:
       - name: Publish to WinGet
         uses: vedantmgoyal9/winget-releaser@main
         with:
-          identifier: DBAdminX.Diff   # ← 改成你的真实 WinGet identifier
+          identifier: Zeromark.DiffViewer   # ← 请替换成你的真实 WinGet identifier
           version: ${{ steps.get-version.outputs.version }}
           token: ${{ secrets.WINGET_TOKEN }}
           installer-regex: '\.exe$'
