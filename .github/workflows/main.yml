@@ -39,6 +39,9 @@ jobs:
           # 安装常见字体（解决 Helvetica/Arial 问题）
           sudo apt install -y fonts-liberation fonts-dejavu-core fontconfig
           
+          # 更新字体缓存
+          fc-cache -fv
+          
           # 确认 icon.svg 存在
           ls -l icon.svg
 
