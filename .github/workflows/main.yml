@@ -34,30 +34,43 @@ jobs:
       - name: Generate icons from icon.svg
         run: |
           sudo apt update
-          sudo apt install -y imagemagick icnsutils
+          sudo apt install -y build-essential git pkg-config autoconf automake libtool \
+            libltdl-dev libjpeg-dev libpng-dev libtiff-dev libfreetype6-dev libfontconfig1-dev \
+            libxml2-dev libbz2-dev liblzma-dev libzstd-dev libwebp-dev libopenjp2-7-dev \
+            liblcms2-dev libexpat1-dev libx11-dev libxt-dev libxext-dev libxrender-dev \
+            libcairo2-dev libpango1.0-dev librsvg2-dev libgomp1 zlib1g-dev libgs-dev \
+            ghostscript fonts-liberation fonts-dejavu-core fontconfig
 
-          # 安装常见字体（解决 Helvetica/Arial 问题）
-          sudo apt install -y fonts-liberation fonts-dejavu-core fontconfig
-          
+          # 源码安装 ImageMagick 7
+          git clone https://github.com/ImageMagick/ImageMagick.git ImageMagick7
+          cd ImageMagick7
+          git checkout 7.1.2-13  # 或指定最新 tag
+          ./configure --prefix=/usr/local --with-modules --enable-hdri --with-freetype=yes \
+            --with-fontconfig=yes --with-rsvg=yes --with-pango=yes --with-cairo=yes \
+            --with-xml=yes --with-webp=yes --with-openjp2=yes --with-lcms=yes \
+            --with-openexr=yes --with-gslib=yes --with-gvc=yes --with-perl=yes \
+            --with-magick-plus-plus=yes
+          make -j$(nproc)
+          sudo make install
+          sudo ldconfig /usr/local/lib
+          cd ..
+
+          # 安装 icnsutils
+          sudo apt install -y icnsutils
+
           # 更新字体缓存
           fc-cache -fv
-          
-          # 确认 icon.svg 存在
-          ls -l icon.svg
 
-          # 生成多尺寸 PNG
-          convert icon.svg -resize 512x512   icon-512.png
-          convert icon.svg -resize 256x256   icon-256.png
-          convert icon.svg -resize 128x128   icon-128.png
-          convert icon.svg -resize 64x64     icon-64.png
-          convert icon.svg -resize 48x48     icon-48.png
-          convert icon.svg -resize 32x32     icon-32.png
-          convert icon.svg -resize 16x16     icon-16.png
+          # 使用 magick 命令
+          magick convert icon.svg -resize 512x512   icon-512.png
+          magick convert icon.svg -resize 256x256   icon-256.png
+          magick convert icon.svg -resize 128x128   icon-128.png
+          magick convert icon.svg -resize 64x64     icon-64.png
+          magick convert icon.svg -resize 48x48     icon-48.png
+          magick convert icon.svg -resize 32x32     icon-32.png
+          magick convert icon.svg -resize 16x16     icon-16.png
 
-          # 生成 Windows .ico（多尺寸）
-          convert icon-*.png icon.ico
-
-          # 生成 macOS .icns
+          magick convert icon-*.png icon.ico
           png2icns icon.icns icon-*.png
 
           # 打包上传
