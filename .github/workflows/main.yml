@@ -71,7 +71,8 @@ jobs:
           magick convert icon.svg -resize 16x16     icon-16.png
 
           magick convert icon-*.png icon.ico
-          png2icns icon.icns icon-*.png
+          # 直接用 ImageMagick 生成 .icns（推荐！绕过 png2icns 问题）
+          magick convert icon-*.png -define icns:compositing=yes icon.icns
 
           # 打包上传
           mkdir -p icons
