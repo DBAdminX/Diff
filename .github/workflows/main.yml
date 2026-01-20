@@ -3,7 +3,7 @@ name: Build and Release Cross-Platform with Icons
 on:
   push:
     tags:
-      - '*'
+      - 'v*'
 
 permissions:
   contents: write
@@ -301,18 +301,6 @@ jobs:
     if: startsWith(github.ref, 'refs/tags/v')
 
     steps:
-      - name: Download Windows executable
-        uses: actions/download-artifact@v4
-        with:
-          name: Diff-windows
-          path: artifacts/windows
-
-      - name: Download Windows installer
-        uses: actions/download-artifact@v4
-        with:
-          name: Diff-Installer
-          path: artifacts/installer
-
       - name: Get version from tag
         id: get-version
         run: |
@@ -327,4 +315,4 @@ jobs:
           identifier: DBAdminX.Diff   # ← 请替换成你的真实 WinGet identifier
           version: ${{ steps.get-version.outputs.version }}
           token: ${{ secrets.WINGET_TOKEN }}
-          installer-regex: '\.exe$'
+          installer-regex: 'DiffViewer-Installer.*\.exe$'
