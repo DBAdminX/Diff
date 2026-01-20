@@ -1,126 +1,120 @@
-import tkinter as tk
-from tkinter import ttk, filedialog, messagebox
+import customtkinter as ctk
+from tkinter import filedialog, messagebox
 import difflib
-from tkinter.scrolledtext import ScrolledText
 
+ctk.set_appearance_mode("System")          # "System" / "Light" / "Dark"
+ctk.set_default_color_theme("blue")        # blue / dark-blue / green  — blue 最接近 Material You
 
-class SimpleDiffViewer(tk.Tk):
+class SimpleDiffViewer(ctk.CTk):
     def __init__(self):
         super().__init__()
-        self.title("Diff Viewer")
+        self.title("Material You Diff Viewer")
         self.geometry("1300x850")
 
-        # Main container
-        main = ttk.Frame(self, padding=10)
-        main.pack(fill=tk.BOTH, expand=True)
+        # 主布局
+        self.grid_rowconfigure(0, weight=1)
+        self.grid_columnconfigure(0, weight=1)
 
-        # --- TOP SECTION: Input Areas ---
-        input_container = ttk.Frame(main)
-        input_container.pack(fill=tk.BOTH, expand=True)
+        # 上半部分：左右文本对比区
+        paned = ctk.CTkFrame(self)
+        paned.grid(row=0, column=0, sticky="nsew", padx=10, pady=10)
 
-        self.master_scroll = ttk.Scrollbar(input_container, orient=tk.VERTICAL, command=self._on_scrollbar_scroll)
-        self.master_scroll.pack(side=tk.RIGHT, fill=tk.Y)
+        self.left_frame = ctk.CTkFrame(paned)
+        self.right_frame = ctk.CTkFrame(paned)
 
-        paned = ttk.PanedWindow(input_container, orient=tk.HORIZONTAL)
-        paned.pack(side=tk.LEFT, fill=tk.BOTH, expand=True)
+        self.left_frame.pack(side="left", fill="both", expand=True, padx=(0, 5))
+        self.right_frame.pack(side="right", fill="both", expand=True, padx=(5, 0))
 
-        # Create Sides
-        self.left_text, self.left_gutter = self._create_text_with_gutter(paned, "Original (Left)")
-        self.right_text, self.right_gutter = self._create_text_with_gutter(paned, "Modified (Right)")
+        # 左侧和右侧文本区域
+        self._create_side(self.left_frame, "Original (Left)", is_left=True)
+        self._create_side(self.right_frame, "Modified (Right)", is_left=False)
 
-        self._sync_lock = False
-        for widget in (self.left_text, self.right_text):
-            widget.bind("<MouseWheel>", self._on_mousewheel)
-            widget.bind("<Button-4>", self._on_mousewheel)
-            widget.bind("<Button-5>", self._on_mousewheel)
-            widget.bind("<<Modified>>", self._update_all_gutters)
+        # 下半部分：Diff 输出
+        diff_frame = ctk.CTkFrame(self)
+        diff_frame.grid(row=1, column=0, sticky="nsew", padx=10, pady=(0, 10))
+        diff_frame.grid_rowconfigure(0, weight=1)
+        diff_frame.grid_columnconfigure(0, weight=1)
 
-        # --- MIDDLE SECTION: Controls ---
-        ctrl_frame = ttk.Frame(main)
-        ctrl_frame.pack(fill=tk.X, pady=10)
-
-        btn_container = ttk.Frame(ctrl_frame)
-        btn_container.pack(anchor=tk.CENTER)
-
-        # Compare Button
-        ttk.Button(btn_container, text="Compare", command=self.show_diff).pack(side=tk.LEFT, padx=5)
-
-        # Clear All Button - Standard tk.Button used for color support
-        self.clear_btn = tk.Button(
-            btn_container,
-            text="CLEAR ALL",
-            command=self.clear_all,
-            bg="#ff4d4d",  # Bright Red
-            fg="white",  # White text
-            activebackground="#cc0000",
-            activeforeground="white",
-            font=("Segoe UI", 9, "bold"),
-            padx=10,
-            relief="flat"
+        self.diff_view = ctk.CTkTextbox(
+            diff_frame,
+            wrap="none",
+            font=("Consolas", 11),
+            state="disabled",
+            fg_color=("#fdf6e3", "#2d2d2d"),  # 浅色/深色背景
+            text_color=("#333", "#ddd"),
+            border_width=0
         )
-        self.clear_btn.pack(side=tk.LEFT, padx=5)
+        self.diff_view.grid(row=0, column=0, sticky="nsew", padx=5, pady=5)
 
-        # Copy Button
-        ttk.Button(btn_container, text="COPY RESULTS", command=self.copy_results).pack(side=tk.LEFT, padx=5)
+        # 标签样式（使用 tag_config 而非 tag_configure）
+        self.diff_view.tag_config("add",    foreground="#006400", background="#e6ffe6")
+        self.diff_view.tag_config("remove", foreground="#8B0000", background="#ffe6e6")
+        self.diff_view.tag_config("sign",   foreground="#888")
+        self.diff_view.tag_config("lineno", foreground="#666")
 
-        # --- BOTTOM SECTION: Diff Output ---
-        diff_frame = ttk.LabelFrame(main, text="Differences Output", padding=5)
-        diff_frame.pack(fill=tk.BOTH, expand=True)
+        # 控制按钮栏
+        btn_frame = ctk.CTkFrame(self)
+        btn_frame.grid(row=2, column=0, sticky="ew", padx=10, pady=10)
 
-        self.diff_view = ScrolledText(diff_frame, wrap=tk.NONE, font=("Consolas", 10),
-                                      bg="#fdf6e3", state='disabled')
-        self.diff_view.pack(fill=tk.BOTH, expand=True)
+        ctk.CTkButton(btn_frame, text="Compare", command=self.show_diff).pack(side="left", padx=8)
+        ctk.CTkButton(btn_frame, text="CLEAR ALL", command=self.clear_all,
+                      fg_color="#ff4d4d", hover_color="#cc0000").pack(side="left", padx=8)
+        ctk.CTkButton(btn_frame, text="COPY RESULTS", command=self.copy_results).pack(side="left", padx=8)
 
-        # Tags
-        self.diff_view.tag_configure("add", foreground="#006400", background="#e6ffe6")
-        self.diff_view.tag_configure("remove", foreground="#8B0000", background="#ffe6e6")
-        self.diff_view.tag_configure("sign", foreground="#555")
-        self.diff_view.tag_configure("lineno", foreground="#666", font=("Consolas", 10, "bold"))
+        # 同步滚动相关
+        self._sync_lock = False
+        self.left_text.bind("<MouseWheel>", self._on_mousewheel)
+        self.right_text.bind("<MouseWheel>", self._on_mousewheel)
+        self.left_text.bind("<<Modified>>", self._update_all_gutters)
+        self.right_text.bind("<<Modified>>", self._update_all_gutters)
 
-    def _create_text_with_gutter(self, parent, label):
-        outer = ttk.Frame(parent)
-        parent.add(outer, weight=1)
-        ttk.Label(outer, text=label, font=("Segoe UI", 10, "bold")).pack(pady=(0, 4))
+    def _create_side(self, parent, label, is_left):
+        # 标题
+        ctk.CTkLabel(parent, text=label, font=("Segoe UI", 14, "bold")).pack(pady=(10, 5))
 
-        btn_bar = ttk.Frame(outer)
-        btn_bar.pack(fill=tk.X, pady=(0, 6))
+        # 按钮栏
+        btn_bar = ctk.CTkFrame(parent)
+        btn_bar.pack(fill="x", pady=(0, 8))
 
-        is_left = "Original" in label
         target_text = lambda: self.left_text if is_left else self.right_text
 
-        ttk.Button(btn_bar, text="Open File",
-                   command=lambda: self._load_file(target_text())).pack(side=tk.LEFT, padx=2)
-        ttk.Button(btn_bar, text="Paste",
-                   command=lambda: self._paste_from_clipboard(target_text())).pack(side=tk.LEFT, padx=2)
+        ctk.CTkButton(btn_bar, text="Open File", width=120,
+                      command=lambda: self._load_file(target_text())).pack(side="left", padx=4)
+        ctk.CTkButton(btn_bar, text="Paste", width=120,
+                      command=lambda: self._paste_from_clipboard(target_text())).pack(side="left", padx=4)
 
-        text_frame = ttk.Frame(outer)
-        text_frame.pack(fill=tk.BOTH, expand=True)
+        # 文本 + 行号
+        text_frame = ctk.CTkFrame(parent)
+        text_frame.pack(fill="both", expand=True)
 
-        gutter = tk.Text(text_frame, width=5, padx=5, takefocus=0, border=0,
-                         background="#f0f0f0", foreground="#999999",
-                         font=("Consolas", 10), state='disabled')
-        gutter.pack(side=tk.LEFT, fill=tk.Y)
+        gutter = ctk.CTkTextbox(text_frame, width=60, height=10, state="disabled",
+                                fg_color=("#f0f0f0", "#3a3a3a"), text_color="#888",
+                                font=("Consolas", 11), border_width=0)
+        gutter.pack(side="left", fill="y")
 
-        txt = tk.Text(text_frame, wrap=tk.NONE, font=("Consolas", 10),
-                      undo=True, borderwidth=1, relief="sunken",
-                      yscrollcommand=self._sync_scroll)
-        txt.pack(side=tk.LEFT, fill=tk.BOTH, expand=True)
+        txt = ctk.CTkTextbox(text_frame, wrap="none", font=("Consolas", 11),
+                             undo=True, fg_color=("#ffffff", "#1e1e1e"), text_color=("#111", "#eee"))
+        txt.pack(side="left", fill="both", expand=True)
 
-        return txt, gutter
+        if is_left:
+            self.left_text = txt
+            self.left_gutter = gutter
+        else:
+            self.right_text = txt
+            self.right_gutter = gutter
 
-    # --- ACTIONS ---
-
+    # ------------------- 功能函数 -------------------
     def _paste_from_clipboard(self, widget):
         try:
             content = self.clipboard_get()
-            widget.delete("1.0", tk.END)
-            widget.insert("1.0", content)
+            widget.delete("0.0", "end")
+            widget.insert("0.0", content)
             self._update_all_gutters()
-        except tk.TclError:
+        except:
             messagebox.showwarning("Warning", "Clipboard is empty.")
 
     def copy_results(self):
-        content = self.diff_view.get("1.0", tk.END).strip()
+        content = self.diff_view.get("0.0", "end").strip()
         if content:
             self.clipboard_clear()
             self.clipboard_append(content)
@@ -129,11 +123,11 @@ class SimpleDiffViewer(tk.Tk):
             messagebox.showwarning("Warning", "Nothing to copy!")
 
     def clear_all(self):
-        self.left_text.delete("1.0", tk.END)
-        self.right_text.delete("1.0", tk.END)
-        self.diff_view.configure(state='normal')
-        self.diff_view.delete("1.0", tk.END)
-        self.diff_view.configure(state='disabled')
+        self.left_text.delete("0.0", "end")
+        self.right_text.delete("0.0", "end")
+        self.diff_view.configure(state="normal")
+        self.diff_view.delete("0.0", "end")
+        self.diff_view.configure(state="disabled")
         self._update_all_gutters()
 
     def _update_all_gutters(self, event=None):
@@ -143,67 +137,51 @@ class SimpleDiffViewer(tk.Tk):
             event.widget.edit_modified(False)
 
     def _update_gutter(self, text_widget, gutter_widget):
-        gutter_widget.config(state='normal')
-        gutter_widget.delete("1.0", tk.END)
-        line_count = int(text_widget.index('end-1c').split('.')[0])
+        gutter_widget.configure(state="normal")
+        gutter_widget.delete("0.0", "end")
+        line_count = int(text_widget.index("end-1c").split('.')[0])
         line_numbers = "\n".join(str(i) for i in range(1, line_count + 1))
-        gutter_widget.insert("1.0", line_numbers)
-        gutter_widget.config(state='disabled')
-
-    # --- SCROLLING ---
-
-    def _sync_scroll(self, *args):
-        if self._sync_lock: return
-        self._sync_lock = True
-        self.master_scroll.set(*args)
-        for w in (self.left_text, self.right_text, self.left_gutter, self.right_gutter):
-            w.yview_moveto(args[0])
-        self._sync_lock = False
-
-    def _on_scrollbar_scroll(self, *args):
-        for w in (self.left_text, self.right_text, self.left_gutter, self.right_gutter):
-            w.yview(*args)
+        gutter_widget.insert("0.0", line_numbers)
+        gutter_widget.configure(state="disabled")
 
     def _on_mousewheel(self, event):
-        if event.num == 4:
-            delta = -1
-        elif event.num == 5:
-            delta = 1
-        else:
-            delta = -int(event.delta / 120)
-        for w in (self.left_text, self.right_text, self.left_gutter, self.right_gutter):
-            w.yview_scroll(delta, "units")
+        delta = -1 if event.delta < 0 else 1
+        self.left_text.yview_scroll(delta, "units")
+        self.right_text.yview_scroll(delta, "units")
+        self.left_gutter.yview_scroll(delta, "units")
+        self.right_gutter.yview_scroll(delta, "units")
         return "break"
-
-    # --- CORE LOGIC ---
 
     def _load_file(self, widget):
         path = filedialog.askopenfilename()
-        if not path: return
+        if not path:
+            return
         try:
             with open(path, 'r', encoding='utf-8') as f:
                 content = f.read()
-            widget.delete("1.0", tk.END)
-            widget.insert("1.0", content)
+            widget.delete("0.0", "end")
+            widget.insert("0.0", content)
             self._update_all_gutters()
         except Exception as e:
             messagebox.showerror("Error", str(e))
 
     def show_diff(self):
-        self.diff_view.configure(state='normal')
-        self.diff_view.delete("1.0", tk.END)
-        lines1 = self.left_text.get("1.0", "end-1c").splitlines()
-        lines2 = self.right_text.get("1.0", "end-1c").splitlines()
+        self.diff_view.configure(state="normal")
+        self.diff_view.delete("0.0", "end")
+
+        lines1 = self.left_text.get("0.0", "end-1c").splitlines()
+        lines2 = self.right_text.get("0.0", "end-1c").splitlines()
 
         differ = difflib.Differ()
         diff_result = list(differ.compare(lines1, lines2))
 
         old_ln = new_ln = 0
         changes_found = False
+
         for line in diff_result:
             prefix, content = line[:2], line[2:]
             if prefix == "  ":
-                old_ln += 1;
+                old_ln += 1
                 new_ln += 1
             elif prefix == "- ":
                 old_ln += 1
@@ -215,14 +193,15 @@ class SimpleDiffViewer(tk.Tk):
                 changes_found = True
 
         if not changes_found:
-            self.diff_view.insert(tk.END, ">>> Files are identical.\n", "sign")
-        self.diff_view.configure(state='disabled')
+            self.diff_view.insert("end", ">>> Files are identical.\n", "sign")
+
+        self.diff_view.configure(state="disabled")
 
     def _insert_diff_line(self, old_num, new_num, sign, content, tag):
         l_part = f"{old_num:4}" if old_num else "    "
         r_part = f"{new_num:4}" if new_num else "    "
-        self.diff_view.insert(tk.END, f"{l_part} | {r_part} | {sign} ", ("sign", "lineno"))
-        self.diff_view.insert(tk.END, content + "\n", tag)
+        self.diff_view.insert("end", f"{l_part} | {r_part} | {sign} ", ("sign", "lineno"))
+        self.diff_view.insert("end", content + "\n", tag)
 
 
 if __name__ == "__main__":

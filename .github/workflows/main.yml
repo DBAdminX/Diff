@@ -1,10 +1,7 @@
-name: Build and Release
+name: Build and Release Cross-Platform with Icons
 
 on:
   push:
-    # OR A||B
-    #branches:
-      #- main
     tags:
       - 'v*'
 
@@ -13,55 +10,279 @@ permissions:
   pull-requests: write
 
 jobs:
-  pyinstaller-build:
-    runs-on: windows-latest
+  create-release:
+    runs-on: ubuntu-latest
     steps:
-      - name: Create Executable
-        uses: sayyid5416/pyinstaller@v1
+      - name: Create GitHub Release
+        id: create_release
+        uses: actions/create-release@v1
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
         with:
-          python_ver: 3.11
-          spec: 'src/diff.py'
-          upload_exe_with_name: 'Diff'
-          options: --onefile, --name "Diff", --windowed,
-      - name: Download Zip
+          tag_name: ${{ github.ref_name }}
+          release_name: Release ${{ github.ref_name }}
+          draft: false
+          prerelease: false
+          body: "Auto-generated cross-platform release for Diff Viewer ${{ github.ref_name }}"
+
+  build:
+    needs: create-release
+    runs-on: ${{ matrix.os }}
+    strategy:
+      matrix:
+        include:
+          - os: windows-latest
+            target: windows
+            artifact_name: DiffViewer.exe
+            installer_name: DiffViewer-Installer.exe
+            py_ver: '3.11'
+            icon: icon.ico
+
+          - os: macos-latest
+            target: macos
+            artifact_name: DiffViewer
+            py_ver: '3.11'
+            icon: icon.icns
+
+          - os: ubuntu-22.04
+            target: linux
+            artifact_name: DiffViewer
+            py_ver: '3.11'
+            icon: icon.svg   # Linux 直接用 SVG
+
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+        with:
+          fetch-depth: 0   # 需要 git log 获取 commit message
+
+      # ──────────────── 只在 Linux runner 上生成图标（.ico 和 .icns） ────────────────
+      - name: Generate icons from icon.svg (only on Linux)
+        if: matrix.os == 'ubuntu-22.04'
+        run: |
+          sudo apt update
+          sudo apt install -y imagemagick libicns-utils
+
+          # 确认 icon.svg 存在
+          ls -l icon.svg
+
+          # 生成多尺寸 PNG
+          convert icon.svg -resize 512x512   icon-512.png
+          convert icon.svg -resize 256x256   icon-256.png
+          convert icon.svg -resize 128x128   icon-128.png
+          convert icon.svg -resize 64x64     icon-64.png
+          convert icon.svg -resize 48x48     icon-48.png
+          convert icon.svg -resize 32x32     icon-32.png
+          convert icon.svg -resize 16x16     icon-16.png
+
+          # 生成 Windows .ico（多尺寸）
+          convert icon-*.png icon.ico
+
+          # 生成 macOS .icns
+          png2icns icon.icns icon-*.png
+
+          # 上传生成的图标供其他 runner 使用
+          mkdir -p icons
+          cp icon.ico icon.icns icon.svg icons/
+
+      - name: Upload generated icons artifact (from Linux)
+        if: matrix.os == 'ubuntu-22.04'
+        uses: actions/upload-artifact@v4
+        with:
+          name: generated-icons
+          path: icons/
+          if-no-files-found: error
+
+      # ──────────────── Windows 和 macOS 下载生成的图标 ────────────────
+      - name: Download generated icons
+        if: matrix.os != 'ubuntu-22.04'
         uses: actions/download-artifact@v4
         with:
-          name: Diff
-      - name: Compile .ISS to .EXE Installer
+          name: generated-icons
+          path: icons/
+
+      # ──────────────── 安装 Python 和依赖 ────────────────
+      - name: Set up Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: ${{ matrix.py_ver }}
+
+      - name: Install dependencies
+        run: |
+          python -m pip install --upgrade pip
+          pip install customtkinter pyinstaller
+        shell: bash
+
+      # ──────────────── PyInstaller 打包（带图标） ────────────────
+      - name: Build with PyInstaller
+        run: |
+          pyinstaller --onefile --windowed --name DiffViewer \
+            --icon=icons/${{ matrix.icon }} \
+            --collect-all customtkinter \
+            src/diff.py
+        shell: bash
+
+      # ──────────────── 准备 artifact ────────────────
+      - name: Prepare artifact
+        run: |
+          mkdir -p dist/artifacts
+          cp dist/DiffViewer* dist/artifacts/${{ matrix.artifact_name }}
+        shell: bash
+
+      - name: Upload executable artifact
+        uses: actions/upload-artifact@v4
+        with:
+          name: Diff-${{ matrix.target }}
+          path: dist/artifacts/${{ matrix.artifact_name }}
+          if-no-files-found: error
+
+      # ──────────────── Windows 专用：Inno Setup 安装程序 ────────────────
+      - name: Compile Inno Setup Installer (Windows only)
+        if: matrix.target == 'windows'
         uses: Minionguyjpro/Inno-Setup-Action@v1.2.2
         with:
           path: setup.iss
           options: /O+
-      - name: Upload binaries to release
+
+      - name: Prepare Windows installer artifact
+        if: matrix.target == 'windows'
+        run: |
+          mkdir -p dist/artifacts
+          cp Output/DiffViewer-Installer.exe dist/artifacts/${{ matrix.installer_name }} || cp Output/setup.exe dist/artifacts/${{ matrix.installer_name }}
+        shell: bash
+
+      - name: Upload Windows installer artifact
+        if: matrix.target == 'windows'
+        uses: actions/upload-artifact@v4
+        with:
+          name: Diff-Installer
+          path: dist/artifacts/${{ matrix.installer_name }}
+          if-no-files-found: error
+
+      # ──────────────── Linux 专用：生成 .deb 包（使用 SVG 图标） ────────────────
+      - name: Install fpm (for .deb)
+        if: matrix.target == 'linux'
+        run: |
+          sudo apt update
+          sudo apt install -y ruby-full build-essential zlib1g-dev
+          sudo gem install fpm
+
+      - name: Prepare staging for .deb
+        if: matrix.target == 'linux'
+        run: |
+          mkdir -p staging/usr/bin staging/usr/share/applications staging/usr/share/icons/hicolor/scalable/apps
+          cp dist/DiffViewer staging/usr/bin/DiffViewer
+          chmod +x staging/usr/bin/DiffViewer
+
+          # 桌面快捷方式
+          echo '[Desktop Entry]
+          Name=Diff Viewer
+          Comment=Material You Diff Tool
+          Exec=/usr/bin/DiffViewer
+          Icon=diffviewer
+          Terminal=false
+          Type=Application
+          Categories=Utility;Development;' > staging/usr/share/applications/DiffViewer.desktop
+
+          # 复制 SVG 图标（scalable）
+          cp icons/icon.svg staging/usr/share/icons/hicolor/scalable/apps/diffviewer.svg
+
+      - name: Build .deb with fpm
+        if: matrix.target == 'linux'
+        run: |
+          fpm -s dir -t deb \
+            -n diffviewer \
+            -v ${{ github.ref_name || '1.0.0' }} \
+            -a amd64 \
+            --description "Material You Diff Viewer - a modern cross-platform diff tool" \
+            --url "https://github.com/${{ github.repository }}" \
+            --maintainer "Zeromark" \
+            --license "MIT" \
+            -C staging \
+            usr
+
+      - name: Upload .deb artifact
+        if: matrix.target == 'linux'
+        uses: actions/upload-artifact@v4
+        with:
+          name: Diff-deb
+          path: diffviewer_*.deb
+          if-no-files-found: error
+
+      # ──────────────── 获取 commit message 作为 release body ────────────────
+      - name: Get commit message for release body
+        id: get_commit_msg
+        run: |
+          COMMIT_MSG=$(git log -1 --format=%B ${{ github.sha }})
+          COMMIT_MSG="${COMMIT_MSG//'%'/'%25'}"
+          COMMIT_MSG="${COMMIT_MSG//$'\n'/'%0A'}"
+          COMMIT_MSG="${COMMIT_MSG//$'\r'/'%0D'}"
+          echo "body=Release ${{ github.ref_name }}%0A%0A${COMMIT_MSG}" >> $GITHUB_OUTPUT
+        shell: bash
+
+      # ──────────────── 上传到 Release ────────────────
+      - name: Upload executable to release
         uses: svenstaro/upload-release-action@v2
         with:
           repo_token: ${{ secrets.GITHUB_TOKEN }}
-          file: ./Output/Diff.exe
-          asset_name: Diff.exe
-          tag: ${{ github.ref }}
+          file: dist/artifacts/${{ matrix.artifact_name }}
+          asset_name: DiffViewer-${{ matrix.target }}-${{ github.ref_name }}
+          tag: ${{ github.ref_name }}
           overwrite: true
-          body: "This is my release text"
+          body: ${{ steps.get_commit_msg.outputs.body }}
+
+      - name: Upload Windows installer to release
+        if: matrix.target == 'windows'
+        uses: svenstaro/upload-release-action@v2
+        with:
+          repo_token: ${{ secrets.GITHUB_TOKEN }}
+          file: dist/artifacts/${{ matrix.installer_name }}
+          asset_name: DiffViewer-Installer-${{ github.ref_name }}.exe
+          tag: ${{ github.ref_name }}
+          overwrite: true
+          body: ${{ steps.get_commit_msg.outputs.body }}
+
+      - name: Upload .deb to release
+        if: matrix.target == 'linux'
+        uses: svenstaro/upload-release-action@v2
+        with:
+          repo_token: ${{ secrets.GITHUB_TOKEN }}
+          file: diffviewer_*.deb
+          asset_name: DiffViewer-${{ github.ref_name }}-linux.deb
+          tag: ${{ github.ref_name }}
+          overwrite: true
+          body: ${{ steps.get_commit_msg.outputs.body }}
+
   publish-to-winget:
+    needs: build
     runs-on: windows-latest
-    needs: pyinstaller-build   # Only run after successful build & release upload
-    if: startsWith(github.ref, 'refs/tags/v')   # extra safety
+    if: startsWith(github.ref, 'refs/tags/v')
 
     steps:
+      - name: Download Windows executable
+        uses: actions/download-artifact@v4
+        with:
+          name: Diff-windows
+          path: artifacts/windows
+
+      - name: Download Windows installer
+        uses: actions/download-artifact@v4
+        with:
+          name: Diff-Installer
+          path: artifacts/installer
+
       - name: Get version from tag
         id: get-version
         run: |
-          # Finding the version from release name
-          $VERSION="${{ github.event.release.name }}" -replace '^.*/ '
-          "version=$VERSION" >> $env:GITHUB_OUTPUT
+          $tag = "${{ github.ref_name }}"
+          $version = $tag -replace '^v', ''
+          echo "version=$version" >> $env:GITHUB_OUTPUT
         shell: pwsh
 
       - name: Publish to WinGet
         uses: vedantmgoyal9/winget-releaser@main
         with:
-          identifier: DBAdminX.Diff      # ← REQUIRED: change to your real WinGet identifier (e.g. JanLunge.DiffTool)
+          identifier: DBAdminX.Diff   # ← 改成你的真实 WinGet identifier
           version: ${{ steps.get-version.outputs.version }}
-          token: ${{ secrets.WINGET_TOKEN }}   # Personal Access Token with repo scope for winget-pkgs fork
-          # Optional but recommended:
-          # installers-regex: '\.exe$'               # only match .exe files
-          # max-versions-to-keep: 3
-
+          token: ${{ secrets.WINGET_TOKEN }}
+          installer-regex: '\.exe$'
