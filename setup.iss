@@ -5,7 +5,7 @@
 #define MyAppVersion "{{github.ref_name}}"
 #define MyAppPublisher "DBAdminX"
 #define MyAppURL "https://github.com/DBAdminX/{{github.repository}}"
-#define MyAppExeName "DiffViewer"
+#define MyAppExeName "DiffViewer.exe"
 
 [Setup]
 ; NOTE: The value of AppId uniquely identifies this application. Do not use the same AppId value in installers for other applications.
