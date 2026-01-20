@@ -144,7 +144,14 @@ jobs:
       - name: Prepare artifact
         run: |
           mkdir -p dist/artifacts
-          cp dist/DiffViewer* dist/artifacts/${{ matrix.artifact_name }}
+          # macOS: 单文件可执行文件名为 DiffViewer（无 .exe 后缀）
+          if [[ "${{ matrix.target }}" == "macos" ]]; then
+            cp dist/DiffViewer dist/artifacts/DiffViewer
+          else
+            # Windows: DiffViewer.exe
+            # Linux: DiffViewer（单文件）
+            cp dist/DiffViewer* dist/artifacts/${{ matrix.artifact_name }}
+          fi
         shell: bash
 
       - name: Upload executable artifact
