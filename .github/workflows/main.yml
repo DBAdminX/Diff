@@ -161,6 +161,13 @@ jobs:
           path: dist/artifacts/${{ matrix.artifact_name }}
           if-no-files-found: error
 
+      - name: Replace App Version
+        if: matrix.target == 'windows'
+        run: |
+          # 先替换版本号占位符
+          sed -i "s/{{github.ref_name}}/${{ github.ref_name }}/g" setup.iss
+        shell: bash
+
       # Windows 专用：Inno Setup 安装程序
       - name: Compile Inno Setup Installer (Windows only)
         if: matrix.target == 'windows'
