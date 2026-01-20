@@ -266,13 +266,23 @@ jobs:
           tag: ${{ github.ref_name }}
           overwrite: true
           body: ${{ steps.get_commit_msg.outputs.body }}
-
+      - name: Find .deb file path
+        if: matrix.target == 'linux'
+        id: find_deb
+        run: |
+          DEB_FILE=$(ls diffviewer_*.deb | head -n 1)  # 只取第一个匹配的文件
+          if [ -z "$DEB_FILE" ]; then
+            echo "No .deb file found!"
+            exit 1
+          fi
+          echo "deb_file=$DEB_FILE" >> $GITHUB_OUTPUT
+        shell: bash
       - name: Upload .deb to release
         if: matrix.target == 'linux'
         uses: svenstaro/upload-release-action@v2
         with:
           repo_token: ${{ secrets.GITHUB_TOKEN }}
-          file: diffviewer_*.deb
+          file: ${{ steps.find_deb.outputs.deb_file }}
           asset_name: DiffViewer-${{ github.ref_name }}-linux.deb
           tag: ${{ github.ref_name }}
           overwrite: true
