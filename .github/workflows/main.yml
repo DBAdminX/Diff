@@ -34,7 +34,7 @@ jobs:
       - name: Generate icons from icon.svg
         run: |
           sudo apt update
-          sudo apt install -y imagemagick libicns-utils
+          sudo apt install -y imagemagick icnsutils
 
           # 确认 icon.svg 存在
           ls -l icon.svg
@@ -280,7 +280,7 @@ jobs:
       - name: Publish to WinGet
         uses: vedantmgoyal9/winget-releaser@main
         with:
-          identifier: Zeromark.DiffViewer   # ← 请替换成你的真实 WinGet identifier
+          identifier: DBAdminX.Diff   # ← 请替换成你的真实 WinGet identifier
           version: ${{ steps.get-version.outputs.version }}
           token: ${{ secrets.WINGET_TOKEN }}
           installer-regex: '\.exe$'
