@@ -1,39 +1,23 @@
 # Diff
 
-## Push
-
-```sh
-git tag v1.0.0
-
-git push origin tag v1.0.0
-```
-
 ## Install
 
-```powershell
+### Windows
+
+1. By winget
+```ps1
 winget install DBAdminX.Diff
 ```
 
-## Update
+2. Download from release ***DiffViewer-Installer-version.exe***
 
-```powershell
-wingetcreate update DBAdminX.Diff -s -u 'https://github.com/DBAdminX/Diff/releases/download/v1.0.2/Diff.exe|x64' -v 'v1.0.2'
+### Linux
+
+1. Snap
+```shell
+sudo snap install DiffViewer
 ```
 
-## Update && Submit
+2. Download from release
 
-```powershell
-wingetcreate update DBAdminX.Diff -u 'https://github.com/DBAdminX/Diff/releases/download/v1.0.2/Diff.exe|x64' -v 'v1.0.2'
-
-winget validate --mainfest .
-
-wingetcreate submit .
-```
-
-## Local Install
-
-```powershell
-winget settings --enable LocalManifestFiles
-
-winget install --mainfest .
-```
+### MacOS

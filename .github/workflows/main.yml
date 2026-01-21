@@ -315,4 +315,4 @@ jobs:
           identifier: DBAdminX.Diff   # ← 请替换成你的真实 WinGet identifier
           version: ${{ steps.get-version.outputs.version }}
           token: ${{ secrets.WINGET_TOKEN }}
-          installer-regex: 'DiffViewer-Installer.*\.exe$'
+          installers-regex: 'DiffViewer-Installer.*\.exe$'
