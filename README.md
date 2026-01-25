@@ -10,6 +10,10 @@ winget install DBAdminX.Diff
 ```
 
 2. Download from release ***DiffViewer-Installer-version.exe***
+```shell
+sudo apt update
+sudo apt install ./package-name.deb
+```
 
 ### Linux
 
